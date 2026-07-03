@@ -16,6 +16,42 @@ const __dirname = path.dirname(__filename);
 let memMembers = [...initialMembers];
 let memTributes = [...initialTributes];
 let memMarquee = "Kính chào quý vị con cháu dòng tộc cụ Nghiêm Cung. Hệ thống gia phả số luôn tự động cập nhật và kết nối toàn bộ hệ thống các đời, hỗ trợ tra cứu trực tuyến thông tin lịch sử từ đường Hòa Xá, Hà Nội... Kính dâng tổ tiên lòng biết ơn vô hạn.";
+let memHeroTitle = "GIA PHẢ GIA ĐÌNH CỤ NGHIÊM CUNG";
+let memHeroSubtitle = "Chi thứ 5 • Hệ 4 Phái Giáp • Tiểu Tông";
+let memHeroAddress = "Xã Hòa Xá, Ứng Hòa, Thành phố Hà Nội";
+let memHeroSlides = [
+  {
+    id: 1,
+    title: "Hội ngộ con cháu ngày Giỗ Tổ",
+    img: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    id: 2,
+    title: "Sửa sang tôn tạo Từ Đường dòng họ",
+    img: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=600&auto=format&fit=crop"
+  },
+  {
+    id: 3,
+    title: "Gặp mặt chúc thọ các Cụ Cao Niên",
+    img: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600&auto=format&fit=crop"
+  }
+];
+let memAnnouncements = [
+  {
+    id: "ann-1",
+    tag: "Khẩn",
+    tagColor: "red",
+    title: "Thông báo lịch giỗ tổ niên độ 2026",
+    content: "Sẽ tổ chức đón tiếp dâng hương toàn tộc vào ngày 12 tháng 10 âm lịch hằng năm..."
+  },
+  {
+    id: "ann-2",
+    tag: "Tin vui",
+    tagColor: "sky",
+    title: "Hoàn thành Sổ Gia phả điện tử",
+    content: "Hệ thống phả hệ số chính thức bàn giao vận hành trực tuyến, bảo mật tuyệt đối."
+  }
+];
 
 // Initialize Supabase Client
 let supabase: any = null;
@@ -314,52 +350,113 @@ async function startServer() {
     }
   });
 
-  // 7. Get Marquee Text
-  app.get("/api/settings/marquee", async (req, res) => {
+  // 7. Get All Settings (including marquee, hero details, slides, announcements)
+  app.get("/api/settings", async (req, res) => {
     const client = getSupabaseClient();
+    const fallbackSettings = {
+      marquee_text: memMarquee,
+      hero_title: memHeroTitle,
+      hero_subtitle: memHeroSubtitle,
+      hero_address: memHeroAddress,
+      hero_slides: JSON.stringify(memHeroSlides),
+      announcements: JSON.stringify(memAnnouncements)
+    };
+
     if (!client) {
-      return res.json({ text: memMarquee });
+      return res.json(fallbackSettings);
     }
+
     try {
-      const { data, error } = await client.from("settings").select("value").eq("key", "marquee_text").single();
+      const { data, error } = await client.from("settings").select("*");
       if (error) {
-        if (error.code === "PGRST116") {
-          // No row found, let's seed it
-          await client.from("settings").insert([{ key: "marquee_text", value: memMarquee }]);
-          return res.json({ text: memMarquee });
-        }
-        logSupabaseError("GET /api/settings/marquee", error);
-        return res.json({ text: memMarquee });
+        logSupabaseError("GET /api/settings", error);
+        return res.json(fallbackSettings);
       }
-      memMarquee = data.value;
-      res.json({ text: data.value });
+
+      const settingsMap: Record<string, string> = {};
+      data.forEach((row: any) => {
+        settingsMap[row.key] = row.value;
+      });
+
+      // Update local memory cache with values from database if they exist
+      if (settingsMap.marquee_text !== undefined) memMarquee = settingsMap.marquee_text;
+      if (settingsMap.hero_title !== undefined) memHeroTitle = settingsMap.hero_title;
+      if (settingsMap.hero_subtitle !== undefined) memHeroSubtitle = settingsMap.hero_subtitle;
+      if (settingsMap.hero_address !== undefined) memHeroAddress = settingsMap.hero_address;
+      
+      if (settingsMap.hero_slides !== undefined) {
+        try { memHeroSlides = JSON.parse(settingsMap.hero_slides); } catch (e) {}
+      }
+      if (settingsMap.announcements !== undefined) {
+        try { memAnnouncements = JSON.parse(settingsMap.announcements); } catch (e) {}
+      }
+
+      // Return combined settings
+      return res.json({
+        marquee_text: settingsMap.marquee_text || memMarquee,
+        hero_title: settingsMap.hero_title || memHeroTitle,
+        hero_subtitle: settingsMap.hero_subtitle || memHeroSubtitle,
+        hero_address: settingsMap.hero_address || memHeroAddress,
+        hero_slides: settingsMap.hero_slides || JSON.stringify(memHeroSlides),
+        announcements: settingsMap.announcements || JSON.stringify(memAnnouncements)
+      });
     } catch (err: any) {
-      logSupabaseError("GET /api/settings/marquee exception", err);
-      res.json({ text: memMarquee });
+      logSupabaseError("GET /api/settings exception", err);
+      return res.json(fallbackSettings);
     }
   });
 
-  // 8. Update Marquee Text
+  // 8. Update Specific Setting Key-Value Pair
+  app.post("/api/settings", async (req, res) => {
+    const { key, value } = req.body;
+    if (!key) return res.status(400).json({ error: "key is required" });
+
+    const stringValue = typeof value === "string" ? value : JSON.stringify(value);
+
+    // Update fallback memory cache
+    if (key === "marquee_text") memMarquee = stringValue;
+    else if (key === "hero_title") memHeroTitle = stringValue;
+    else if (key === "hero_subtitle") memHeroSubtitle = stringValue;
+    else if (key === "hero_address") memHeroAddress = stringValue;
+    else if (key === "hero_slides") {
+      try { memHeroSlides = typeof value === "string" ? JSON.parse(value) : value; } catch (e) {}
+    }
+    else if (key === "announcements") {
+      try { memAnnouncements = typeof value === "string" ? JSON.parse(value) : value; } catch (e) {}
+    }
+
+    const client = getSupabaseClient();
+    if (!client) {
+      return res.json({ success: true, key, value: stringValue });
+    }
+
+    try {
+      const { error } = await client.from("settings").upsert([{ key, value: stringValue }]);
+      if (error) {
+        logSupabaseError(`POST /api/settings (${key})`, error);
+        return res.json({ success: true, key, value: stringValue });
+      }
+      return res.json({ success: true, key, value: stringValue });
+    } catch (err: any) {
+      logSupabaseError(`POST /api/settings exception (${key})`, err);
+      return res.json({ success: true, key, value: stringValue });
+    }
+  });
+
+  // Legacy endpoints mapped to the generalized ones for safety
+  app.get("/api/settings/marquee", (req, res) => {
+    res.json({ text: memMarquee });
+  });
+
   app.post("/api/settings/marquee", async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
-    
     memMarquee = text;
     const client = getSupabaseClient();
-    if (!client) {
-      return res.json({ text });
+    if (client) {
+      await client.from("settings").upsert([{ key: "marquee_text", value: text }]);
     }
-    try {
-      const { error } = await client.from("settings").upsert([{ key: "marquee_text", value: text }]);
-      if (error) {
-        logSupabaseError("POST /api/settings/marquee", error);
-        return res.json({ text });
-      }
-      res.json({ text });
-    } catch (err: any) {
-      logSupabaseError("POST /api/settings/marquee exception", err);
-      res.json({ text });
-    }
+    res.json({ text });
   });
 
   // 9. Database Connection & Schema Health Check

@@ -23,6 +23,12 @@ interface AdminPanelProps {
   onUpdateMarquee: (newText: string) => void;
   onAddMember: (newMember: Member, shouldSync: boolean) => void;
   onTriggerSync: () => void;
+  heroTitle: string;
+  heroSubtitle: string;
+  heroAddress: string;
+  slides: any[];
+  announcements: any[];
+  onUpdateSetting: (key: string, value: any) => Promise<boolean>;
 }
 
 export default function AdminPanel({
@@ -31,9 +37,43 @@ export default function AdminPanel({
   onUpdateMarquee,
   onAddMember,
   onTriggerSync,
+  heroTitle,
+  heroSubtitle,
+  heroAddress,
+  slides,
+  announcements,
+  onUpdateSetting,
 }: AdminPanelProps) {
   // Announcement / Marquee state
   const [localMarquee, setLocalMarquee] = useState(marqueeText);
+
+  // Hero custom states
+  const [localHeroTitle, setLocalHeroTitle] = useState(heroTitle);
+  const [localHeroSubtitle, setLocalHeroSubtitle] = useState(heroSubtitle);
+  const [localHeroAddress, setLocalHeroAddress] = useState(heroAddress);
+
+  // New Slide Form State
+  const [newSlideTitle, setNewSlideTitle] = useState("");
+  const [newSlideImg, setNewSlideImg] = useState("");
+
+  // New Announcement Form State
+  const [newAnnTitle, setNewAnnTitle] = useState("");
+  const [newAnnTag, setNewAnnTag] = useState("Thông báo");
+  const [newAnnTagColor, setNewAnnTagColor] = useState("amber");
+  const [newAnnContent, setNewAnnContent] = useState("");
+
+  // Sync internal hero/announcement with props on update
+  useEffect(() => {
+    setLocalHeroTitle(heroTitle);
+  }, [heroTitle]);
+
+  useEffect(() => {
+    setLocalHeroSubtitle(heroSubtitle);
+  }, [heroSubtitle]);
+
+  useEffect(() => {
+    setLocalHeroAddress(heroAddress);
+  }, [heroAddress]);
 
   // SQL Schema Display States
   const [showSqlSetup, setShowSqlSetup] = useState(true);
@@ -253,6 +293,289 @@ export default function AdminPanel({
               className="bg-heritage-800 hover:bg-heritage-900 text-white font-bold text-xs px-4 py-2 rounded-xl transition shrink-0"
             >
               Cập nhật
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 1. QUẢN TRỊ HERO BANNER TEXTS */}
+      <div className="bg-white border-2 border-heritage-600 rounded-2xl p-5 shadow-sm space-y-4">
+        <h3 className="text-sm font-serif font-bold text-heritage-900 border-b border-stone-100 pb-2 flex items-center gap-1.5">
+          <span>⚙️ Cấu hình tiêu đề &amp; Thông tin Banner chính</span>
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="block font-bold text-stone-700 mb-1">Tiêu đề chính (Dòng tộc/Họ)</label>
+            <input
+              type="text"
+              value={localHeroTitle}
+              onChange={(e) => setLocalHeroTitle(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 focus:ring-1 focus:ring-heritage-500 focus:outline-none text-stone-800 font-semibold"
+              placeholder="GIA PHẢ GIA ĐÌNH CỤ NGHIÊM CUNG"
+            />
+          </div>
+          <div>
+            <label className="block font-bold text-stone-700 mb-1">Tiêu đề phụ (Phái/Nhánh/Chi)</label>
+            <input
+              type="text"
+              value={localHeroSubtitle}
+              onChange={(e) => setLocalHeroSubtitle(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 focus:ring-1 focus:ring-heritage-500 focus:outline-none text-stone-800"
+              placeholder="Chi thứ 5 • Hệ 4 Phái Giáp • Tiểu Tông"
+            />
+          </div>
+        </div>
+
+        <div className="text-xs">
+          <label className="block font-bold text-stone-700 mb-1">Địa chỉ Từ Đường dòng họ</label>
+          <input
+            type="text"
+            value={localHeroAddress}
+            onChange={(e) => setLocalHeroAddress(e.target.value)}
+            className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 focus:ring-1 focus:ring-heritage-500 focus:outline-none text-stone-800"
+            placeholder="Xã Hòa Xá, Ứng Hòa, Thành phố Hà Nội"
+          />
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={async () => {
+              const ok1 = await onUpdateSetting("hero_title", localHeroTitle);
+              const ok2 = await onUpdateSetting("hero_subtitle", localHeroSubtitle);
+              const ok3 = await onUpdateSetting("hero_address", localHeroAddress);
+              if (ok1 && ok2 && ok3) {
+                alert("Đã cập nhật cấu hình tiêu đề Banner chính thành công!");
+              }
+            }}
+            className="bg-heritage-800 hover:bg-heritage-900 text-white font-bold text-xs px-5 py-2 rounded-xl transition"
+          >
+            Lưu tiêu đề &amp; Địa chỉ
+          </button>
+        </div>
+      </div>
+
+      {/* 2. QUẢN TRỊ SLIDESHOW HOẠT ĐỘNG NỔI BẬT */}
+      <div className="bg-white border-2 border-heritage-600 rounded-2xl p-5 shadow-sm space-y-4">
+        <h3 className="text-sm font-serif font-bold text-heritage-900 border-b border-stone-100 pb-2 flex items-center justify-between">
+          <span>🖼️ Danh sách hình ảnh hoạt động (Slideshow)</span>
+          <span className="text-[11px] text-stone-500 font-normal">Tổng cộng: {slides.length}</span>
+        </h3>
+
+        {/* Existing slide items with preview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {slides.map((slide, idx) => (
+            <div key={slide.id || idx} className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 relative group flex flex-col justify-between">
+              <div>
+                <img 
+                  src={slide.img} 
+                  alt={slide.title} 
+                  className="w-full h-20 object-cover rounded-lg mb-2 border border-stone-100" 
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=600&auto=format&fit=crop";
+                  }}
+                />
+                <p className="text-[11px] font-bold text-stone-800 line-clamp-1">{slide.title}</p>
+                <p className="text-[9px] text-stone-400 truncate mt-0.5">{slide.img}</p>
+              </div>
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={async () => {
+                    const newSlidesList = slides.filter((_, i) => i !== idx);
+                    const success = await onUpdateSetting("hero_slides", newSlidesList);
+                    if (success) {
+                      alert("Đã xóa ảnh hoạt động này khỏi danh sách!");
+                    }
+                  }}
+                  className="text-red-600 hover:text-red-900 hover:bg-red-50 p-1 rounded transition text-xs flex items-center gap-1 font-bold"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Xóa ảnh
+                </button>
+              </div>
+            </div>
+          ))}
+          {slides.length === 0 && (
+            <p className="col-span-full text-center text-xs text-stone-400 italic py-4">Chưa có hình ảnh hoạt động nào được cấu hình.</p>
+          )}
+        </div>
+
+        {/* Form to add a new slide item */}
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-3">
+          <span className="block font-bold text-xs text-heritage-900 uppercase tracking-wide">
+            ➕ Thêm hình ảnh hoạt động mới vào Slideshow
+          </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="block text-stone-600 mb-1">Mô tả hoạt động / Tên slide *</label>
+              <input
+                type="text"
+                value={newSlideTitle}
+                onChange={(e) => setNewSlideTitle(e.target.value)}
+                className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 text-stone-800"
+                placeholder="Ví dụ: Gặp mặt chúc thọ các Cụ Cao Niên..."
+              />
+            </div>
+            <div>
+              <label className="block text-stone-600 mb-1">Địa chỉ liên kết hình ảnh (URL Image) *</label>
+              <input
+                type="text"
+                value={newSlideImg}
+                onChange={(e) => setNewSlideImg(e.target.value)}
+                className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 text-stone-800"
+                placeholder="https://images.unsplash.com/photo-..."
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={async () => {
+                if (!newSlideTitle.trim() || !newSlideImg.trim()) {
+                  alert("Vui lòng điền đủ tiêu đề và liên kết hình ảnh.");
+                  return;
+                }
+                const newSlide = {
+                  id: Date.now(),
+                  title: newSlideTitle.trim(),
+                  img: newSlideImg.trim()
+                };
+                const updatedSlides = [...slides, newSlide];
+                const success = await onUpdateSetting("hero_slides", updatedSlides);
+                if (success) {
+                  setNewSlideTitle("");
+                  setNewSlideImg("");
+                  alert("Thêm ảnh hoạt động vào Slideshow thành công!");
+                }
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition"
+            >
+              + Thêm vào Slideshow
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. QUẢN TRỊ BẢNG THÔNG BÁO / NOTICEBOARD ANNOUNCEMENTS */}
+      <div className="bg-white border-2 border-heritage-600 rounded-2xl p-5 shadow-sm space-y-4">
+        <h3 className="text-sm font-serif font-bold text-heritage-900 border-b border-stone-100 pb-2 flex items-center justify-between">
+          <span>📢 Quản trị Bảng thông báo dòng tộc</span>
+          <span className="text-[11px] text-stone-500 font-normal">Tổng số tin: {announcements.length}</span>
+        </h3>
+
+        {/* Existing notices list */}
+        <div className="space-y-3">
+          {announcements.map((ann, idx) => (
+            <div key={ann.id || idx} className="bg-stone-50 border border-stone-200 rounded-xl p-3 flex justify-between items-start text-xs gap-4">
+              <div className="space-y-1 max-w-[85%]">
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                  ann.tagColor === "red" || ann.tag === "Khẩn"
+                    ? "bg-red-100 text-red-800"
+                    : ann.tagColor === "sky" || ann.tag === "Tin vui"
+                      ? "bg-sky-100 text-sky-800"
+                      : ann.tagColor === "emerald"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-amber-100 text-amber-800"
+                }`}>
+                  {ann.tag || "Thông báo"}
+                </span>
+                <p className="font-bold text-stone-800 mt-1">{ann.title}</p>
+                <p className="text-stone-500 text-[11px] mt-0.5 leading-relaxed">{ann.content}</p>
+              </div>
+              <button
+                onClick={async () => {
+                  const newAnnList = announcements.filter((_, i) => i !== idx);
+                  const success = await onUpdateSetting("announcements", newAnnList);
+                  if (success) {
+                    alert("Đã xóa thông báo này thành công!");
+                  }
+                }}
+                className="text-red-600 hover:text-red-900 p-1.5 hover:bg-red-50 rounded transition font-semibold"
+                title="Xóa tin này"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          {announcements.length === 0 && (
+            <p className="text-center text-xs text-stone-400 italic py-4">Chưa có thông báo dòng họ nào.</p>
+          )}
+        </div>
+
+        {/* Form to add a new announcement */}
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 space-y-3 text-xs">
+          <span className="block font-bold text-xs text-heritage-900 uppercase tracking-wide">
+            ➕ Đăng tin thông báo mới lên Bảng tin
+          </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <label className="block text-stone-600 mb-1">Tiêu đề bản tin *</label>
+              <input
+                type="text"
+                value={newAnnTitle}
+                onChange={(e) => setNewAnnTitle(e.target.value)}
+                className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 text-stone-800"
+                placeholder="Ví dụ: Đóng góp tôn tạo lăng tẩm cụ tổ..."
+              />
+            </div>
+            <div>
+              <label className="block text-stone-600 mb-1">Loại tin nhắn (Tag) *</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <input
+                  type="text"
+                  value={newAnnTag}
+                  onChange={(e) => setNewAnnTag(e.target.value)}
+                  className="w-full bg-white border border-stone-300 rounded-lg px-2 py-1 text-stone-800 text-[11px]"
+                  placeholder="Khẩn, Tin mừng..."
+                />
+                <select
+                  value={newAnnTagColor}
+                  onChange={(e) => setNewAnnTagColor(e.target.value)}
+                  className="w-full bg-white border border-stone-300 rounded-lg px-1.5 py-1 text-stone-700 text-[11px]"
+                >
+                  <option value="amber">Màu Vàng</option>
+                  <option value="red">Màu Đỏ (Khẩn)</option>
+                  <option value="sky">Màu Xanh lam</option>
+                  <option value="emerald">Màu Xanh lá</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-stone-600 mb-1">Nội dung chi tiết thông báo *</label>
+            <textarea
+              value={newAnnContent}
+              onChange={(e) => setNewAnnContent(e.target.value)}
+              rows={2}
+              className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 text-stone-800"
+              placeholder="Nhập nội dung ngắn gọn của thông báo dòng họ..."
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={async () => {
+                if (!newAnnTitle.trim() || !newAnnContent.trim()) {
+                  alert("Vui lòng điền đủ tiêu đề và nội dung thông báo.");
+                  return;
+                }
+                const newAnn = {
+                  id: `ann-${Date.now()}`,
+                  tag: newAnnTag.trim(),
+                  tagColor: newAnnTagColor,
+                  title: newAnnTitle.trim(),
+                  content: newAnnContent.trim()
+                };
+                const updatedAnn = [...announcements, newAnn];
+                const success = await onUpdateSetting("announcements", updatedAnn);
+                if (success) {
+                  setNewAnnTitle("");
+                  setNewAnnContent("");
+                  setNewAnnTag("Thông báo");
+                  setNewAnnTagColor("amber");
+                  alert("Đã đăng tin thông báo lên Bảng tin thành công!");
+                }
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition"
+            >
+              + Đăng thông báo
             </button>
           </div>
         </div>

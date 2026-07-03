@@ -53,7 +53,7 @@ export default function App() {
 
   // --- MODERN SLIDESHOW / CAROUSEL ---
   const [currentSlide, setCurrentSlide] = useState(0);
-  const slides = [
+  const [slides, setSlides] = useState<any[]>([
     {
       id: 1,
       title: "Hội ngộ con cháu ngày Giỗ Tổ",
@@ -69,14 +69,36 @@ export default function App() {
       title: "Gặp mặt chúc thọ các Cụ Cao Niên",
       img: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600&auto=format&fit=crop"
     }
-  ];
+  ]);
+
+  const [heroTitle, setHeroTitle] = useState<string>("GIA PHẢ GIA ĐÌNH CỤ NGHIÊM CUNG");
+  const [heroSubtitle, setHeroSubtitle] = useState<string>("Chi thứ 5 • Hệ 4 Phái Giáp • Tiểu Tông");
+  const [heroAddress, setHeroAddress] = useState<string>("Xã Hòa Xá, Ứng Hòa, Thành phố Hà Nội");
+
+  const [announcements, setAnnouncements] = useState<any[]>([
+    {
+      id: "ann-1",
+      tag: "Khẩn",
+      tagColor: "red",
+      title: "Thông báo lịch giỗ tổ niên độ 2026",
+      content: "Sẽ tổ chức đón tiếp dâng hương toàn tộc vào ngày 12 tháng 10 âm lịch hằng năm..."
+    },
+    {
+      id: "ann-2",
+      tag: "Tin vui",
+      tagColor: "sky",
+      title: "Hoàn thành Sổ Gia phả điện tử",
+      content: "Hệ thống phả hệ số chính thức bàn giao vận hành trực tuyến, bảo mật tuyệt đối."
+    }
+  ]);
 
   useEffect(() => {
+    if (slides.length === 0) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [slides.length]);
 
   // --- CLOCK AND TIME ---
   const [timeString, setTimeString] = useState("");
@@ -103,10 +125,10 @@ export default function App() {
     async function loadData() {
       try {
         setIsLoading(true);
-        const [membersRes, tributesRes, marqueeRes, dbRes] = await Promise.all([
+        const [membersRes, tributesRes, settingsRes, dbRes] = await Promise.all([
           fetch("/api/members"),
           fetch("/api/tributes"),
-          fetch("/api/settings/marquee"),
+          fetch("/api/settings").catch(() => null),
           fetch("/api/db-status").catch(() => null)
         ]);
 
@@ -118,9 +140,25 @@ export default function App() {
           const tributesData = await tributesRes.json();
           setTributes(tributesData);
         }
-        if (marqueeRes.ok) {
-          const marqueeData = await marqueeRes.json();
-          setMarqueeText(marqueeData.text);
+        if (settingsRes && settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          if (settingsData.marquee_text) setMarqueeText(settingsData.marquee_text);
+          if (settingsData.hero_title) setHeroTitle(settingsData.hero_title);
+          if (settingsData.hero_subtitle) setHeroSubtitle(settingsData.hero_subtitle);
+          if (settingsData.hero_address) setHeroAddress(settingsData.hero_address);
+          
+          if (settingsData.hero_slides) {
+            try {
+              const parsedSlides = typeof settingsData.hero_slides === "string" ? JSON.parse(settingsData.hero_slides) : settingsData.hero_slides;
+              if (Array.isArray(parsedSlides)) setSlides(parsedSlides);
+            } catch (e) {}
+          }
+          if (settingsData.announcements) {
+            try {
+              const parsedAnn = typeof settingsData.announcements === "string" ? JSON.parse(settingsData.announcements) : settingsData.announcements;
+              if (Array.isArray(parsedAnn)) setAnnouncements(parsedAnn);
+            } catch (e) {}
+          }
         }
         if (dbRes && dbRes.ok) {
           const statusData = await dbRes.json();
@@ -375,13 +413,40 @@ export default function App() {
     });
   };
 
+  const handleUpdateSetting = async (key: string, value: any): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value })
+      });
+      if (res.ok) {
+        if (key === "marquee_text") setMarqueeText(value);
+        else if (key === "hero_title") setHeroTitle(value);
+        else if (key === "hero_subtitle") setHeroSubtitle(value);
+        else if (key === "hero_address") setHeroAddress(value);
+        else if (key === "hero_slides") setSlides(value);
+        else if (key === "announcements") setAnnouncements(value);
+        showToast("Cập nhật cấu hình dòng tộc thành công!", "success");
+        return true;
+      } else {
+        showToast("Cập nhật cấu hình thất bại.", "warning");
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi kết nối máy chủ cập nhật cấu hình.", "warning");
+      return false;
+    }
+  };
+
   const handleTriggerSync = async () => {
     try {
       showToast("Đang đồng bộ dữ liệu với cơ sở dữ liệu Supabase...", "info");
-      const [membersRes, tributesRes, marqueeRes, dbRes] = await Promise.all([
+      const [membersRes, tributesRes, settingsRes, dbRes] = await Promise.all([
         fetch("/api/members"),
         fetch("/api/tributes"),
-        fetch("/api/settings/marquee"),
+        fetch("/api/settings").catch(() => null),
         fetch("/api/db-status").catch(() => null)
       ]);
 
@@ -393,9 +458,25 @@ export default function App() {
         const tributesData = await tributesRes.json();
         setTributes(tributesData);
       }
-      if (marqueeRes.ok) {
-        const marqueeData = await marqueeRes.json();
-        setMarqueeText(marqueeData.text);
+      if (settingsRes && settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        if (settingsData.marquee_text) setMarqueeText(settingsData.marquee_text);
+        if (settingsData.hero_title) setHeroTitle(settingsData.hero_title);
+        if (settingsData.hero_subtitle) setHeroSubtitle(settingsData.hero_subtitle);
+        if (settingsData.hero_address) setHeroAddress(settingsData.hero_address);
+        
+        if (settingsData.hero_slides) {
+          try {
+            const parsedSlides = typeof settingsData.hero_slides === "string" ? JSON.parse(settingsData.hero_slides) : settingsData.hero_slides;
+            if (Array.isArray(parsedSlides)) setSlides(parsedSlides);
+          } catch (e) {}
+        }
+        if (settingsData.announcements) {
+          try {
+            const parsedAnn = typeof settingsData.announcements === "string" ? JSON.parse(settingsData.announcements) : settingsData.announcements;
+            if (Array.isArray(parsedAnn)) setAnnouncements(parsedAnn);
+          } catch (e) {}
+        }
       }
       if (dbRes && dbRes.ok) {
         const statusData = await dbRes.json();
@@ -450,13 +531,13 @@ export default function App() {
             </div>
             <div>
               <span className="text-heritage-300 uppercase tracking-widest text-xs font-bold font-serif">
-                Chi thứ 5 • Hệ 4 Phái Giáp • Tiểu Tông
+                {heroSubtitle}
               </span>
               <h1 className="text-2xl sm:text-3xl font-extrabold font-serif text-heritage-100 tracking-wide mt-1">
-                GIA PHẢ GIA ĐÌNH CỤ NGHIÊM CUNG
+                {heroTitle}
               </h1>
               <p className="text-xs sm:text-sm text-heritage-300 mt-1 flex items-center justify-center sm:justify-start gap-1">
-                <MapPin className="w-4 h-4 text-heritage-400" /> Xã Hòa Xá, Ứng Hòa, Thành phố Hà Nội
+                <MapPin className="w-4 h-4 text-heritage-400" /> {heroAddress}
               </p>
             </div>
           </div>
@@ -474,10 +555,10 @@ export default function App() {
               <div 
                 className="absolute inset-0 transition-all duration-1000 flex flex-col justify-end p-2 bg-cover bg-center" 
                 style={{ 
-                  backgroundImage: `linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 60%), url('${slides[currentSlide].img}')` 
+                  backgroundImage: `linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 60%), url('${slides[currentSlide]?.img || "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?q=80&w=600&auto=format&fit=crop"}')` 
                 }}
               >
-                <p className="text-[11px] font-semibold text-white truncate">{slides[currentSlide].title}</p>
+                <p className="text-[11px] font-semibold text-white truncate">{slides[currentSlide]?.title || "Hoạt động dòng tộc"}</p>
               </div>
 
               {/* Slider Dots */}
@@ -900,6 +981,12 @@ export default function App() {
               onUpdateMarquee={handleUpdateMarquee}
               onAddMember={handleAddMember}
               onTriggerSync={handleTriggerSync}
+              heroTitle={heroTitle}
+              heroSubtitle={heroSubtitle}
+              heroAddress={heroAddress}
+              slides={slides}
+              announcements={announcements}
+              onUpdateSetting={handleUpdateSetting}
             />
           )}
 
@@ -918,21 +1005,32 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
             </h4>
             <div className="space-y-3.5 text-xs">
-              <div className="bg-stone-50 hover:bg-heritage-50/50 p-3 rounded-lg border border-stone-100 transition">
-                <span className="text-[10px] bg-red-100 text-red-800 font-bold px-1.5 py-0.5 rounded">
-                  Khẩn
-                </span>
-                <p className="font-bold text-stone-800 mt-1">Thông báo lịch giỗ tổ niên độ 2026</p>
-                <p className="text-stone-500 mt-0.5">Sẽ tổ chức đón tiếp dâng hương toàn tộc vào ngày 12 tháng 10 âm lịch hằng năm...</p>
-              </div>
-
-              <div className="bg-stone-50 hover:bg-heritage-50/50 p-3 rounded-lg border border-stone-100 transition">
-                <span className="text-[10px] bg-sky-100 text-sky-800 font-bold px-1.5 py-0.5 rounded">
-                  Tin vui
-                </span>
-                <p className="font-bold text-stone-800 mt-1">Hoàn thành Sổ Gia phả điện tử</p>
-                <p className="text-stone-500 mt-0.5">Hệ thống phả hệ số chính thức bàn giao vận hành trực tuyến, bảo mật tuyệt đối.</p>
-              </div>
+              {announcements.map((ann, idx) => {
+                const isRed = ann.tagColor === "red" || ann.tag === "Khẩn";
+                const isSky = ann.tagColor === "sky" || ann.tag === "Tin vui";
+                const isEmerald = ann.tagColor === "emerald";
+                const isAmber = ann.tagColor === "amber";
+                return (
+                  <div key={ann.id || idx} className="bg-stone-50 hover:bg-heritage-50/50 p-3 rounded-lg border border-stone-100 transition">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isRed 
+                        ? "bg-red-100 text-red-800" 
+                        : isSky 
+                          ? "bg-sky-100 text-sky-800"
+                          : isEmerald
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {ann.tag || "Thông báo"}
+                    </span>
+                    <p className="font-bold text-stone-800 mt-1">{ann.title}</p>
+                    <p className="text-stone-500 mt-0.5 whitespace-pre-line leading-relaxed">{ann.content}</p>
+                  </div>
+                );
+              })}
+              {announcements.length === 0 && (
+                <p className="text-stone-400 italic text-center py-4">Chưa có thông báo nào mới.</p>
+              )}
             </div>
           </div>
 
