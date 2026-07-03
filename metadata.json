@@ -1,0 +1,6 @@
+{
+  "name": "Gia phả họ Nghiêm",
+  "description": "Hệ thống gia phả số dòng họ Nghiêm Cung tại Hòa Xá, Ứng Hòa, Hà Nội, tích hợp quản lý thành viên, phòng tưởng nhớ tâm linh, trợ lý AI và tính năng nhập xuất Excel chuyên nghiệp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

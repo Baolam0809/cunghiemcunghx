@@ -1,0 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+
+  --color-heritage-50: #fdfbf7;
+  --color-heritage-100: #f8f4eb;
+  --color-heritage-200: #eddcc2;
+  --color-heritage-300: #dfbe92;
+  --color-heritage-400: #cfa065;
+  --color-heritage-500: #be813f;
+  --color-heritage-600: #a4632d;
+  --color-heritage-700: #864923;
+  --color-heritage-800: #68361d;
+  --color-heritage-900: #462314;
+  --color-heritage-950: #261109;
+}
+
+/* Custom styles and animations */
+.traditional-border {
+  border-image: fill 0 linear-gradient(to right, #864923, #be813f, #864923);
+}
+
+/* Marquee Scrolling Animation */
+.marquee-container {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marquee-content {
+  display: inline-block;
+  animation: marquee 30s linear infinite;
+}
+
+.marquee-content:hover {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  0% { transform: translate3d(100%, 0, 0); }
+  100% { transform: translate3d(-100%, 0, 0); }
+}
+
+/* Smoke particles for thắp nhang ảo */
+@keyframes smoke {
+  0% { transform: translateY(0) scaleX(1) scaleY(1); opacity: 0.4; filter: blur(1px); }
+  50% { transform: translateY(-80px) scaleX(1.5) scaleY(1.2); opacity: 0.2; filter: blur(3px); }
+  100% { transform: translateY(-180px) scaleX(2) scaleY(1.5); opacity: 0; filter: blur(5px); }
+}
+
+.smoke-particle {
+  animation: smoke 4s ease-out infinite;
+}
+
+/* Custom Scrollbar for family tree container */
+.tree-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.tree-scroll::-webkit-scrollbar-track {
+  background: #f8f4eb;
+}
+.tree-scroll::-webkit-scrollbar-thumb {
+  background: #cfa065;
+  border-radius: 4px;
+}
+.tree-scroll::-webkit-scrollbar-thumb:hover {
+  background: #be813f;
+}
+
