@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -494,6 +495,105 @@ async function startServer() {
         mode: "Lỗi kết nối", 
         error: err.message || "Không thể kết nối đến host Supabase." 
       });
+    }
+  });
+
+  // 10. Get current Supabase credentials (masked for security)
+  app.get("/api/config/supabase", (req, res) => {
+    const url = process.env.SUPABASE_URL || "";
+    const anon = process.env.SUPABASE_ANON_KEY || "";
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    
+    // Mask keys
+    const mask = (str: string) => {
+      if (!str) return "";
+      if (str.length <= 10) return "******";
+      return str.substring(0, 6) + "..." + str.substring(str.length - 4);
+    };
+
+    res.json({
+      supabaseUrl: url,
+      supabaseAnonKey: mask(anon),
+      supabaseServiceKey: mask(service),
+      isConfigured: !!(url && anon)
+    });
+  });
+
+  // 11. Update and test Supabase credentials dynamically
+  app.post("/api/config/supabase", async (req, res) => {
+    const { supabaseUrl, supabaseAnonKey, supabaseServiceKey } = req.body;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return res.status(400).json({ error: "Yêu cầu điền đầy đủ SUPABASE_URL và SUPABASE_ANON_KEY" });
+    }
+
+    try {
+      // 1. Temporarily store original config to restore if test fails
+      const oldUrl = process.env.SUPABASE_URL;
+      const oldAnon = process.env.SUPABASE_ANON_KEY;
+      const oldService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      // 2. Assign new credentials to environment variables in memory
+      process.env.SUPABASE_URL = supabaseUrl.trim();
+      process.env.SUPABASE_ANON_KEY = supabaseAnonKey.trim();
+      process.env.SUPABASE_SERVICE_ROLE_KEY = (supabaseServiceKey || supabaseAnonKey).trim();
+
+      // 3. Reset the cached supabase client to force re-creation
+      supabase = null;
+
+      // 4. Test connection immediately using the recreated client
+      const testClient = getSupabaseClient();
+      if (!testClient) {
+        // Restore old config
+        process.env.SUPABASE_URL = oldUrl;
+        process.env.SUPABASE_ANON_KEY = oldAnon;
+        process.env.SUPABASE_SERVICE_ROLE_KEY = oldService;
+        supabase = null;
+        return res.status(400).json({ error: "Khởi tạo kết nối Supabase thất bại. Vui lòng kiểm tra lại định dạng URL." });
+      }
+
+      // Test a simple query to see if connection is correct
+      const { error } = await testClient.from("members").select("id").limit(1);
+      
+      let schemaWarning = null;
+      if (error) {
+        const errorMsg = error.message || "";
+        // If it's a "table does not exist" or similar schema error, that means the credentials are CORRECT but tables are missing!
+        const isTableMissing = errorMsg.includes("relation") && errorMsg.includes("does not exist");
+        const isColumnMissing = errorMsg.includes("column") && errorMsg.includes("does not exist");
+        
+        if (isTableMissing || isColumnMissing) {
+          schemaWarning = "Kết nối thành công đến Supabase! Tuy nhiên, hệ thống phát hiện cơ sở dữ liệu của bạn chưa có các bảng cần thiết (hoặc chưa cấu hình đúng). Vui lòng chạy mã SQL Editor ở phần phía dưới để tạo các bảng.";
+        } else {
+          // It's a real connection/authentication error (e.g. invalid key, invalid domain)
+          // Restore old config
+          process.env.SUPABASE_URL = oldUrl;
+          process.env.SUPABASE_ANON_KEY = oldAnon;
+          process.env.SUPABASE_SERVICE_ROLE_KEY = oldService;
+          supabase = null;
+          return res.status(400).json({ 
+            error: `Kết nối đến Supabase thất bại với lỗi: "${errorMsg}". Vui lòng kiểm tra lại URL dự án và API Key.` 
+          });
+        }
+      }
+
+      // 5. Credentials are valid! Write to the persistent .env file so they survive server restarts
+      const envLines = [
+        `GEMINI_API_KEY="${process.env.GEMINI_API_KEY || ''}"`,
+        `APP_URL="${process.env.APP_URL || ''}"`,
+        `SUPABASE_URL="${process.env.SUPABASE_URL}"`,
+        `SUPABASE_ANON_KEY="${process.env.SUPABASE_ANON_KEY}"`,
+        `SUPABASE_SERVICE_ROLE_KEY="${process.env.SUPABASE_SERVICE_ROLE_KEY}"`
+      ];
+      fs.writeFileSync(path.join(process.cwd(), ".env"), envLines.join("\n"), "utf-8");
+
+      return res.json({ 
+        success: true, 
+        message: "Cấu hình Supabase thành công và đã lưu vĩnh viễn vào máy chủ!",
+        schemaWarning: schemaWarning
+      });
+
+    } catch (err: any) {
+      return res.status(500).json({ error: `Lỗi bất ngờ trong quá trình kiểm tra kết nối: ${err.message}` });
     }
   });
 

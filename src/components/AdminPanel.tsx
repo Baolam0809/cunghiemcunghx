@@ -79,6 +79,31 @@ export default function AdminPanel({
   const [showSqlSetup, setShowSqlSetup] = useState(true);
   const [copiedSql, setCopiedSql] = useState(false);
 
+  // Supabase Configuration States
+  const [dbUrl, setDbUrl] = useState("");
+  const [dbAnonKey, setDbAnonKey] = useState("");
+  const [dbServiceKey, setDbServiceKey] = useState("");
+  const [isSavingDbConfig, setIsSavingDbConfig] = useState(false);
+  const [dbConfigError, setDbConfigError] = useState("");
+  const [dbConfigSuccess, setDbConfigSuccess] = useState("");
+
+  useEffect(() => {
+    async function fetchDbConfig() {
+      try {
+        const res = await fetch("/api/config/supabase");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.supabaseUrl) setDbUrl(data.supabaseUrl);
+          if (data.supabaseAnonKey) setDbAnonKey(data.supabaseAnonKey);
+          if (data.supabaseServiceKey) setDbServiceKey(data.supabaseServiceKey);
+        }
+      } catch (err) {
+        console.error("Failed to load Supabase config:", err);
+      }
+    }
+    fetchDbConfig();
+  }, []);
+
   // Form states for New Member
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"Nam" | "Nữ">("Nam");
@@ -578,6 +603,114 @@ export default function AdminPanel({
               + Đăng thông báo
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* 4. CẤU HÌNH KẾT NỐI SUPABASE CLOUD */}
+      <div id="supabase-credentials-setup" className="bg-white border-2 border-heritage-600 rounded-2xl p-5 shadow-sm space-y-4">
+        <h3 className="text-sm font-serif font-bold text-heritage-900 border-b border-stone-100 pb-2 flex items-center gap-1.5">
+          <span>🔑 Cài đặt kết nối Cơ sở dữ liệu Supabase Cloud</span>
+        </h3>
+
+        <p className="text-xs text-stone-600 leading-relaxed">
+          Nhập các thông số kết nối từ trang quản trị dự án Supabase của bạn để kích hoạt đồng bộ dữ liệu trực tuyến (lưu trữ thành viên, bút ký tri ân, cài đặt tiêu đề dòng họ vĩnh viễn).
+        </p>
+
+        <div className="space-y-3.5 text-xs">
+          <div>
+            <label className="block font-bold text-stone-700 mb-1">SUPABASE_URL (Địa chỉ dự án) *</label>
+            <input
+              type="text"
+              value={dbUrl}
+              onChange={(e) => setDbUrl(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 focus:ring-1 focus:ring-heritage-500 focus:outline-none text-stone-800 font-mono"
+              placeholder="https://your-project-id.supabase.co"
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-stone-700 mb-1">SUPABASE_ANON_KEY (Mã khoá công khai Anon) *</label>
+            <input
+              type="password"
+              value={dbAnonKey}
+              onChange={(e) => setDbAnonKey(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 focus:ring-1 focus:ring-heritage-500 focus:outline-none text-stone-800 font-mono"
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            />
+          </div>
+
+          <div>
+            <label className="block font-bold text-stone-700 mb-1">SUPABASE_SERVICE_ROLE_KEY (Mã khoá quản trị tối cao - Không bắt buộc)</label>
+            <input
+              type="password"
+              value={dbServiceKey}
+              onChange={(e) => setDbServiceKey(e.target.value)}
+              className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 focus:ring-1 focus:ring-heritage-500 focus:outline-none text-stone-800 font-mono"
+              placeholder="Bỏ trống để sử dụng mã Anon làm mặc định"
+            />
+          </div>
+        </div>
+
+        {dbConfigError && (
+          <div className="bg-red-50 border border-red-200 text-red-800 text-[11px] p-3 rounded-xl leading-relaxed font-medium">
+            ⚠️ {dbConfigError}
+          </div>
+        )}
+
+        {dbConfigSuccess && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] p-3 rounded-xl leading-relaxed font-medium">
+            ✅ {dbConfigSuccess}
+          </div>
+        )}
+
+        <div className="flex justify-end pt-2">
+          <button
+            onClick={async () => {
+              if (!dbUrl.trim() || !dbAnonKey.trim()) {
+                setDbConfigError("Vui lòng điền đầy đủ địa chỉ URL và Anon Key của dự án Supabase.");
+                setDbConfigSuccess("");
+                return;
+              }
+
+              setIsSavingDbConfig(true);
+              setDbConfigError("");
+              setDbConfigSuccess("");
+
+              try {
+                const response = await fetch("/api/config/supabase", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    supabaseUrl: dbUrl.trim(),
+                    supabaseAnonKey: dbAnonKey.trim(),
+                    supabaseServiceKey: dbServiceKey.trim() || undefined
+                  })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                  setDbConfigSuccess(data.message);
+                  if (data.schemaWarning) {
+                    setDbConfigError(data.schemaWarning);
+                  }
+                  // Trigger re-sync on parent component to update the UI globally
+                  onTriggerSync();
+                  alert("Chúc mừng! Đã kết nối và cấu hình thành công cơ sở dữ liệu Supabase dòng họ.");
+                } else {
+                  setDbConfigError(data.error || "Không thể kết nối đến máy chủ Supabase. Vui lòng kiểm tra lại thông số.");
+                }
+              } catch (err: any) {
+                setDbConfigError(`Lỗi kết nối mạng: ${err.message || String(err)}`);
+              } finally {
+                setIsSavingDbConfig(false);
+              }
+            }}
+            disabled={isSavingDbConfig}
+            className="bg-heritage-800 hover:bg-heritage-900 disabled:bg-stone-300 text-white font-bold text-xs px-5 py-2 rounded-xl transition flex items-center gap-1.5"
+          >
+            {isSavingDbConfig ? "Đang kiểm tra & Lưu cấu hình..." : "Lưu cấu hình & Kết nối"}
+          </button>
         </div>
       </div>
 
